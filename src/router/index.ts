@@ -12,14 +12,23 @@ const router = createRouter({
       component: Catalog,
     },
     {
-      path: '/admin/products',
+      path: '/di-admin',
       name: 'AdminProducts',
       component: AdminProducts,
     },
     {
-      path: '/admin/orders',
+      path: '/di-cotizaciones',
       name: 'AdminOrders',
       component: AdminOrders,
+    },
+    // Mantener rutas antiguas para compatibilidad (redirigen a las nuevas)
+    {
+      path: '/admin/products',
+      redirect: '/di-admin'
+    },
+    {
+      path: '/admin/orders',
+      redirect: '/di-cotizaciones'
     },
   ],
 });

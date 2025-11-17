@@ -101,7 +101,7 @@ const getStatusLabel = (status: string) => {
 };
 
 const goToProducts = () => {
-  router.push('/admin/products');
+  router.push('/di-admin');
 };
 
 const goToCatalog = () => {

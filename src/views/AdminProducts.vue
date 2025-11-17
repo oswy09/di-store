@@ -51,17 +51,33 @@ const fetchProducts = async () => {
 const openEditForm = (product?: Product) => {
   if (product) {
     editingProduct.value = product;
+    console.log('Editando producto:', product);
+    console.log('Colores del producto:', product.available_colors);
+    
+    // Asegurar que available_colors es un array
+    let colors = product.available_colors || [];
+    if (typeof colors === 'string') {
+      try {
+        colors = JSON.parse(colors);
+      } catch (e) {
+        console.error('Error parsing colors:', e);
+        colors = [];
+      }
+    }
+    
     formData.value = {
       name: product.name,
       category: product.category,
       gender: product.gender,
       price: product.price,
       size_type: product.size_type,
-      available_sizes: [...product.available_sizes],
-      available_colors: product.available_colors ? JSON.parse(JSON.stringify(product.available_colors)) : [],
+      available_sizes: [...(product.available_sizes || [])],
+      available_colors: JSON.parse(JSON.stringify(colors)), // Deep copy
       image_url: product.image_url || '',
       description: product.description || '',
     };
+    
+    console.log('FormData cargado con colores:', formData.value.available_colors);
   } else {
     editingProduct.value = null;
     formData.value = {
@@ -112,17 +128,24 @@ const addColor = () => {
     return;
   }
 
-  formData.value.available_colors.push({
+  const newColor = {
     name: colorForm.value.name.trim(),
     hex: colorForm.value.hex.trim(),
     image_url: colorForm.value.image_url.trim(),
-  });
+  };
+
+  console.log('Agregando color:', newColor);
+  formData.value.available_colors.push(newColor);
+  console.log('Colores después de agregar:', formData.value.available_colors);
 
   colorForm.value = { name: '', hex: '', image_url: '' };
 };
 
 const removeColor = (index: number) => {
+  console.log('Removiendo color en índice:', index);
+  console.log('Color a remover:', formData.value.available_colors[index]);
   formData.value.available_colors.splice(index, 1);
+  console.log('Colores después de remover:', formData.value.available_colors);
 };
 
 const saveProduct = async () => {
@@ -130,6 +153,9 @@ const saveProduct = async () => {
     alert('Por favor completa todos los campos obligatorios');
     return;
   }
+
+  // Debug: Log de los colores antes de guardar
+  console.log('Colores a guardar:', formData.value.available_colors);
 
   const productData = {
     name: formData.value.name,
@@ -143,31 +169,46 @@ const saveProduct = async () => {
     description: formData.value.description,
   };
 
-  if (editingProduct.value) {
-    const { error } = await supabase
-      .from('products')
-      .update(productData)
-      .eq('id', editingProduct.value.id);
+  console.log('Datos completos del producto:', productData);
 
-    if (error) {
-      console.error('Error updating product:', error);
-      alert('Error al actualizar el producto');
-    } else {
-      closeForm();
-      fetchProducts();
-    }
-  } else {
-    const { error } = await supabase
-      .from('products')
-      .insert([productData]);
+  try {
+    if (editingProduct.value) {
+      console.log('Actualizando producto con ID:', editingProduct.value.id);
+      
+      const { data, error } = await supabase
+        .from('products')
+        .update(productData)
+        .eq('id', editingProduct.value.id)
+        .select(); // Agregar select para ver el resultado
 
-    if (error) {
-      console.error('Error creating product:', error);
-      alert('Error al crear el producto');
+      if (error) {
+        console.error('Error updating product:', error);
+        alert(`Error al actualizar el producto: ${error.message}`);
+      } else {
+        console.log('Producto actualizado exitosamente:', data);
+        alert('Producto actualizado correctamente');
+        closeForm();
+        fetchProducts();
+      }
     } else {
-      closeForm();
-      fetchProducts();
+      const { data, error } = await supabase
+        .from('products')
+        .insert([productData])
+        .select();
+
+      if (error) {
+        console.error('Error creating product:', error);
+        alert(`Error al crear el producto: ${error.message}`);
+      } else {
+        console.log('Producto creado exitosamente:', data);
+        alert('Producto creado correctamente');
+        closeForm();
+        fetchProducts();
+      }
     }
+  } catch (error) {
+    console.error('Error en saveProduct:', error);
+    alert('Error inesperado al guardar el producto');
   }
 };
 
@@ -190,11 +231,56 @@ const deleteProduct = async (id: string) => {
 };
 
 const goToOrders = () => {
-  router.push('/admin/orders');
+  router.push('/di-cotizaciones');
 };
 
 const goToCatalog = () => {
   router.push('/');
+};
+
+const testSupabaseConnection = async () => {
+  try {
+    console.log('Testing Supabase connection...');
+    
+    // Test de conexión básica
+    const { data: testData, error: testError } = await supabase
+      .from('products')
+      .select('id, name, available_colors')
+      .limit(1);
+    
+    if (testError) {
+      console.error('Error de conexión:', testError);
+      alert(`Error de conexión: ${testError.message}`);
+      return;
+    }
+    
+    console.log('Conexión exitosa. Datos de prueba:', testData);
+    
+    // Test de actualización
+    if (testData && testData.length > 0) {
+      const testProduct = testData[0];
+      console.log('Probando actualización en producto:', testProduct.name);
+      
+      const { data: updateData, error: updateError } = await supabase
+        .from('products')
+        .update({ 
+          available_colors: testProduct.available_colors || [] 
+        })
+        .eq('id', testProduct.id)
+        .select();
+      
+      if (updateError) {
+        console.error('Error de actualización:', updateError);
+        alert(`Error de actualización: ${updateError.message}`);
+      } else {
+        console.log('Actualización exitosa:', updateData);
+        alert('Conexión y permisos OK');
+      }
+    }
+  } catch (error) {
+    console.error('Error general:', error);
+    alert('Error inesperado en la conexión');
+  }
 };
 
 onMounted(() => {
@@ -208,6 +294,7 @@ onMounted(() => {
       <div class="header-content">
         <h1>ADMINISTRAR PRODUCTOS</h1>
         <div class="header-actions">
+          <button class="btn-test" @click="testSupabaseConnection">Test DB</button>
           <button class="btn-secondary" @click="goToOrders">Ver Pedidos</button>
           <button class="btn-secondary" @click="goToCatalog">Ver Catálogo</button>
           <button class="btn-primary" @click="openEditForm()">+ Nuevo Producto</button>
@@ -431,7 +518,8 @@ onMounted(() => {
 }
 
 .btn-primary,
-.btn-secondary {
+.btn-secondary,
+.btn-test {
   padding: 12px 24px;
   border: 2px solid #fff;
   cursor: pointer;
@@ -459,6 +547,17 @@ onMounted(() => {
 .btn-secondary:hover {
   background: #fff;
   color: #000;
+}
+
+.btn-test {
+  background: #dc2626;
+  color: #fff;
+  border-color: #dc2626;
+}
+
+.btn-test:hover {
+  background: #b91c1c;
+  border-color: #b91c1c;
 }
 
 .main-content {
